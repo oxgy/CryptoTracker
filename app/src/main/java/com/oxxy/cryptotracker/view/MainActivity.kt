@@ -12,6 +12,11 @@ import com.oxxy.cryptotracker.service.CryptoAPI
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -27,6 +32,7 @@ class MainActivity : AppCompatActivity(), RecyclerAdapter.Listener {
     private var cryptoModels : ArrayList<CryptoModel>? = null
     private lateinit var recyclerAdapter: RecyclerAdapter
     private var compositeDisposable: CompositeDisposable? = null
+    private var job: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,11 +57,28 @@ class MainActivity : AppCompatActivity(), RecyclerAdapter.Listener {
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .build().create(CryptoAPI::class.java)
 
-        compositeDisposable?.add(retrofit.getData()
+        job = CoroutineScope(Dispatchers.IO).launch {
+            val response = retrofit.getData()
+            withContext(Dispatchers.Main){
+                if(response.isSuccessful){
+                    response.body()?.let {
+                        cryptoModels = ArrayList(it)
+                        cryptoModels?.let {
+                            recyclerAdapter = RecyclerAdapter(it, this@MainActivity)
+                            binding.recyclerView.adapter = recyclerAdapter
+                        }
+                    }
+                }
+            }
+        }
+
+       /* compositeDisposable?.add(retrofit.getData()
             .subscribeOn(Schedulers.io())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribe(this::handleResponse)
         )
+
+        */
 
 
         /*
@@ -100,6 +123,6 @@ class MainActivity : AppCompatActivity(), RecyclerAdapter.Listener {
 
     override fun onDestroy() {
         super.onDestroy()
-        compositeDisposable?.clear()
+        job?.cancel()
     }
 }
